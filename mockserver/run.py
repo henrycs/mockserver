@@ -3,10 +3,9 @@
 # @Time     : 2022-03-09 15:08
 import logging
 import os
-from os import path, sys
+from os import path
 
 import cfg4py
-from cfg4py.config import Config
 
 from mockserver.server import server_start
 

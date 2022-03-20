@@ -3,12 +3,9 @@
 # @Time     : 2022-03-09 15:08
 import logging
 from enum import Enum
-from functools import wraps
 from typing import Union
 
 import cfg4py
-from cfg4py.config import Config
-from sanic import Sanic, request, response
 
 logger = logging.getLogger(__name__)
 

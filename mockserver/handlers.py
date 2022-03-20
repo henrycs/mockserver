@@ -145,6 +145,7 @@ def wrapper_read_case_file(casename: str):
         global_case_data["executed"] = 0
 
         item = items[0]
+        act_result = "to be executed"
         if item["test_action"] == "entrust_update":
             execute_entrust_case(item)
             act_result = "action executed"
@@ -156,7 +157,7 @@ def wrapper_read_case_file(casename: str):
                 "case": casename,
                 "stage": item["stage"],
                 "action": item["test_action"],
-                "status": "to be executed",
+                "status": act_result,
             },
         }
     except Exception as e:

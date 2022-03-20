@@ -1,11 +1,10 @@
 import logging
-import os
 
 from sanic import Blueprint, Sanic, request, response
 
 import mockserver.handlers as handler
 from mockserver.handlers import global_accunt_info
-from mockserver.trade import BidType, OrderSide, OrderStatus
+from mockserver.trade import BidType, OrderSide
 from mockserver.utils import check_request_token, make_response
 
 logger = logging.getLogger(__name__)
@@ -38,7 +37,7 @@ async def bp_mockserver_default_route(request):
 
 
 @bp_mockserver.route("/load", methods=["POST"])
-async def bp_mock_proceed(request):
+async def bp_mock_load(request):
     case_name = request.json.get("case")
     result = handler.wrapper_read_case_file(case_name)
 
@@ -58,7 +57,7 @@ async def bp_mock_proceed(request):
 
 
 @bp_mockserver.route("/current", methods=["POST"])
-async def bp_mock_proceed(request):
+async def bp_mock_current(request):
     result = handler.wrapper_exec_current()
 
     if result["status"] != 200:
@@ -142,6 +141,7 @@ async def bp_mock_cancel_entrust(request):
 @bp_mockserver.route("/today_entrusts", methods=["POST"])
 async def bp_mock_get_today_all_entrusts(request):
     account_id = request.headers.get("Account-ID")
+    print(account_id)
 
     result = handler.wrapper_get_today_entrusts()
     if result["status"] != 200:
@@ -153,6 +153,7 @@ async def bp_mock_get_today_all_entrusts(request):
 @bp_mockserver.route("/today_trades", methods=["POST"])
 async def bp_mock_get_today_all_trades(request):
     account_id = request.headers.get("Account-ID")
+    print(account_id)
 
     result = handler.wrapper_get_today_trades()
     if result["status"] != 200:
