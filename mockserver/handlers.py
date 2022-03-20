@@ -4,7 +4,6 @@ import math
 from os import path
 
 import cfg4py
-
 from mockserver.trade import BidType, OrderSide
 
 logger = logging.getLogger(__name__)
@@ -78,8 +77,8 @@ def execute_entrust_case(item):
         trades = global_accunt_info["trades"]
         trades[entrust_id] = data
 
-    # 更新持仓信息
-    # 因为持仓涉及到可平仓计算，需要历史数据支撑，暂不支持
+        # 更新持仓信息
+        update_positions(data)
 
     # 更新执行信息
     global_case_data["executed"] = 1
@@ -94,6 +93,51 @@ def execute_entrust_case(item):
     return 0
 
 
+def update_positions(data):
+    acct_info = global_accunt_info["info"]
+    account_id = acct_info["account"]
+    positions = global_accunt_info["posistions"]
+
+    code = data["code"]
+    positions[code] = {
+        "account": account_id,
+        "code": code,
+        "shares": 0,
+        "sellable": 0,
+        "price": 0,
+        "market_value": 0,
+        "amount": 0,
+    }
+
+    # 遍历交易记录，计算持仓数据
+    trades = global_accunt_info["trades"]
+    for trade in trades.values():
+        if trade["code"] != code:
+            continue
+
+        status = int(trade["status"])
+        if status != 2 and status != 3:
+            # 未成交的委托不参与计算
+            return None
+
+        pos = positions[code]
+        order_side = trade["order_side"]
+
+        filled_vol = int(trade["filled"])
+        filled_vwap = float(trade["average_price"])
+
+        if order_side == OrderSide.BUY:
+            pos["shares"] += filled_vol
+            pos["sellable"] += filled_vol
+            pos["amount"] += filled_vwap * filled_vol
+            pos["price"] = pos["amount"] / pos["shares"]
+        else:
+            pos["shares"] -= filled_vol
+            pos["sellable"] -= filled_vol
+            pos["amount"] -= filled_vwap * filled_vol
+            pos["price"] = pos["amount"] / pos["shares"]
+
+
 def wrapper_read_case_file(casename: str):
     # 加载测试用例，检查所有步骤
     server_config = cfg4py.get_instance()
@@ -104,7 +148,7 @@ def wrapper_read_case_file(casename: str):
         logger.error("case file not found: %s", case_file)
         return {"status": 400, "msg": "case file not found"}
 
-    # 测试步骤
+    # 解析测试步骤
     items = []
     try:
         with open(case_file, "r", encoding="utf-8") as reader:
@@ -130,7 +174,17 @@ def wrapper_read_case_file(casename: str):
         old_items = global_case_data["items"]
         old_index = global_case_data["index"]
         old_exec_flag = global_case_data["executed"]
-        if old_index != -1 and old_exec_flag == 0:
+
+        # 没有加载过文件
+        if len(old_items) == 0:
+            pass
+        # 如果上一个用例还没开始执行，可以重新加载新的文件
+        elif old_index == 0 and old_exec_flag == 0:
+            pass
+        # 上一个用例已经执行完毕
+        elif len(old_items) == old_index + 1 and old_exec_flag == 1:
+            pass
+        else:
             old_item = old_items[old_index]
             return {
                 "status": 400,
@@ -231,7 +285,12 @@ def wrapper_get_balance(account_id: str):
 
 
 def wrapper_get_positions(account_id: str):
-    return {"status": 200, "msg": "success", "data": {}}
+    positions = global_accunt_info["posistions"]
+    if len(positions) == 0:
+        return {"status": 200, "msg": "success", "data": []}
+
+    data = [i for i in positions.values()]
+    return {"status": 200, "msg": "success", "data": data}
 
 
 def wrapper_trade_operation(
@@ -250,12 +309,6 @@ def wrapper_trade_operation(
     trade_operation = items[index]
     if trade_operation is None or "test_action" not in trade_operation:
         return {"status": 400, "msg": "no test_action defined in case stage"}
-
-    if "parameters" not in trade_operation or "trade_result" not in trade_operation:
-        return {
-            "status": 400,
-            "msg": "parameters and trade_result in trade operation not defined",
-        }
 
     if order_side == OrderSide.BUY:
         if (bid_type == BidType.LIMIT and trade_operation["test_action"] != "buy") or (
@@ -276,6 +329,12 @@ def wrapper_trade_operation(
                 "status": 400,
                 "msg": f"action not matched, {casename}, {trade_operation['stage']}, {trade_operation['test_action']}",
             }
+
+    if "parameters" not in trade_operation or "trade_result" not in trade_operation:
+        return {
+            "status": 400,
+            "msg": "parameters and trade_result in trade operation not defined",
+        }
 
     if exec_flag == 1:
         return {
