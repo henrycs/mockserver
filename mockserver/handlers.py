@@ -364,7 +364,7 @@ def wrapper_trade_operation(
         }
 
 
-def wrapper_cancel_entrust(account_id: str, entrust_no: str):
+def wrapper_cancel_entrusts(account_id: str, entrust_no: str):
     casename = global_case_data["case"]
     items = global_case_data["items"]
     index = global_case_data["index"]
@@ -395,8 +395,14 @@ def wrapper_cancel_entrust(account_id: str, entrust_no: str):
     params = trade_operation["parameters"]
     data = trade_operation["trade_result"]
 
-    entrust_in_action = params["entrust_no"]
+    order_list = params["entrust_no"]
+    if not isinstance(order_list, list) or len(order_list) != 1:
+        return {
+            "status": 400,
+            "msg": f"parameters in trade operation not matched, {casename} -> {trade_operation['stage']}",
+        }
 
+    entrust_in_action = order_list[0]
     if entrust_no == entrust_in_action:
         # 设置当前步骤已执行
         execute_entrust_case(trade_operation)

@@ -206,10 +206,12 @@ async def bp_mock_market_sell(request):
 async def bp_mock_cancel_entrust(request):
     account_id = request.headers.get("Account-ID")
 
-    order_id = request.json.get("entrust_no")
-    logger.info("cancel entrust: %s -> %s", account_id, order_id)
+    order_list = request.json.get("entrust_no")
+    logger.info("cancel entrust: %s -> %s", account_id, order_list)
+    if not isinstance(order_list, list) or len(order_list) != 1:
+        return response.json(make_response(-1, "only 1 entrust_no acceptable"))
 
-    result = handler.wrapper_cancel_entrust(account_id, order_id)
+    result = handler.wrapper_cancel_entrusts(account_id, order_list[0])
     if result["status"] != 200:
         return response.json(make_response(-1, result["msg"]))
 
