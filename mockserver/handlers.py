@@ -414,12 +414,19 @@ def wrapper_cancel_entrusts(account_id: str, entrust_no: str):
         }
 
 
-def wrapper_get_today_entrusts():
-    entrusts = global_accunt_info["entursts"]
-    if len(entrusts) == 0:
+def wrapper_get_today_entrusts(entrust_list):
+    db_entrusts = global_accunt_info["entursts"]
+    if len(db_entrusts) == 0:
         return {"status": 200, "msg": "success", "data": []}
 
-    return {"status": 200, "msg": "success", "data": entrusts}
+    if entrust_list is None or len(entrust_list) == 0:
+        return {"status": 200, "msg": "success", "data": db_entrusts}
+
+    out_entrusts = {}
+    for entrust in entrust_list:
+        if entrust in db_entrusts:
+            out_entrusts[entrust] = db_entrusts[entrust]
+    return {"status": 200, "msg": "success", "data": out_entrusts}
 
 
 def wrapper_get_today_trades():

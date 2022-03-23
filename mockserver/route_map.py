@@ -223,9 +223,11 @@ async def bp_mock_cancel_entrust(request):
 @bp_mockserver.route("/today_entrusts", methods=["POST"])
 async def bp_mock_get_today_all_entrusts(request):
     account_id = request.headers.get("Account-ID")
-    print(account_id)
 
-    result = handler.wrapper_get_today_entrusts()
+    order_list = request.json.get("entrust_no")
+    logger.info("today_entrusts: %s -> %s", account_id, order_list)
+
+    result = handler.wrapper_get_today_entrusts(order_list)
     if result["status"] != 200:
         return response.json(make_response(-1, result["msg"]))
 
