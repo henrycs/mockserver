@@ -42,9 +42,10 @@ async def bp_mock_load2(request):
     return response.json(make_response(0, "OK", result["data"]))
 
 
+# 如果是委托更新指令，直接执行，然后进到下一步
 @bp_mockcontroller.route("/proceed")
 async def bp_mock_proceed(request):
-    result = handler.wrapper_proceed_nextstep()
+    result = handler.wrapper_proceed_non_trade_action()
     if result["status"] != 200:
         return response.json(make_response(-1, result["msg"]))
 
@@ -104,7 +105,7 @@ async def validate_request(request: request):
         return response.json(make_response(401, "invalid account id"), 401)
 
 
-@bp_mockserver.route("/balance", methods=["POST"])
+@bp_mockserver.route("/balance", methods=["GET"])
 async def bp_mock_get_balance(request):
     account_id = request.headers.get("Account-ID")
 
@@ -115,7 +116,7 @@ async def bp_mock_get_balance(request):
     return response.json(make_response(0, "OK", result["data"]))
 
 
-@bp_mockserver.route("/positions", methods=["POST"])
+@bp_mockserver.route("/positions", methods=["GET"])
 async def bp_mock_get_positions(request):
     account_id = request.headers.get("Account-ID")
 
@@ -206,12 +207,36 @@ async def bp_mock_market_sell(request):
 async def bp_mock_cancel_entrust(request):
     account_id = request.headers.get("Account-ID")
 
-    order_list = request.json.get("entrust_no")
-    logger.info("cancel entrust: %s -> %s", account_id, order_list)
-    if not isinstance(order_list, list) or len(order_list) != 1:
-        return response.json(make_response(-1, "only 1 entrust_no acceptable"))
+    entrust_no = request.json.get("entrust_no")
+    logger.info("cancel entrusts: %s -> %s", account_id, entrust_no)
+    if isinstance(entrust_no, list):
+        return response.json(
+            make_response(
+                -1, "cancel_entrust: only 1 entrust_no acceptable, no list permitted"
+            )
+        )
 
-    result = handler.wrapper_cancel_entrusts(account_id, order_list[0])
+    result = handler.wrapper_cancel_entrust(account_id, entrust_no)
+    if result["status"] != 200:
+        return response.json(make_response(-1, result["msg"]))
+
+    # we can check result.status if this entrust success
+    logger.info(f"cancel result: {result['data']}")
+    return response.json(make_response(0, "OK", result["data"]))
+
+
+@bp_mockserver.route("/cancel_entrusts", methods=["POST"])
+async def bp_mock_cancel_entrusts(request):
+    account_id = request.headers.get("Account-ID")
+
+    order_list = request.json.get("entrust_no")
+    logger.info("cancel entrusts: %s -> %s", account_id, order_list)
+    if not isinstance(order_list, list):
+        return response.json(
+            make_response(-1, "cancel_entrusts: entrust_no must be list")
+        )
+
+    result = handler.wrapper_cancel_entrusts(account_id, order_list)
     if result["status"] != 200:
         return response.json(make_response(-1, result["msg"]))
 
@@ -234,6 +259,7 @@ async def bp_mock_get_today_all_entrusts(request):
     return response.json(make_response(0, "OK", result["data"]))
 
 
+# 当前z trade server不用这个接口
 @bp_mockserver.route("/today_trades", methods=["POST"])
 async def bp_mock_get_today_all_trades(request):
     account_id = request.headers.get("Account-ID")
