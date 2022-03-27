@@ -400,6 +400,10 @@ def wrapper_trade_operation(
     price_in_action = params["price"]
     volume_in_action = params["volume"]
 
+    if bid_type == BidType.MARKET:
+        price_in_action = 0
+        price = 0
+
     if (
         security == code_in_action
         and volume == volume_in_action

@@ -105,7 +105,7 @@ async def validate_request(request: request):
         return response.json(make_response(401, "invalid account id"), 401)
 
 
-@bp_mockserver.route("/balance", methods=["GET"])
+@bp_mockserver.route("/balance", methods=["POST"])
 async def bp_mock_get_balance(request):
     account_id = request.headers.get("Account-ID")
 
@@ -116,7 +116,7 @@ async def bp_mock_get_balance(request):
     return response.json(make_response(0, "OK", result["data"]))
 
 
-@bp_mockserver.route("/positions", methods=["GET"])
+@bp_mockserver.route("/positions", methods=["POST"])
 async def bp_mock_get_positions(request):
     account_id = request.headers.get("Account-ID")
 
@@ -249,7 +249,9 @@ async def bp_mock_cancel_entrusts(request):
 async def bp_mock_get_today_all_entrusts(request):
     account_id = request.headers.get("Account-ID")
 
-    order_list = request.json.get("entrust_no")
+    order_list = None
+    if request.json is not None:
+        order_list = request.json.get("entrust_no")
     logger.info("today_entrusts: %s -> %s", account_id, order_list)
 
     result = handler.wrapper_get_today_entrusts(order_list)
