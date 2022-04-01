@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 import math
@@ -173,6 +174,10 @@ def execute_entrust_case(item):
             datalist.append(items)
 
     for data in datalist:
+        # 更新委托信息中的时间为当前时间
+        cur_date = datetime.datetime.now().strftime("%Y-%m-%d")
+        data["time"] = cur_date + data["time"][10 : len(data["time"])]
+        data["recv_at"] = cur_date + data["recv_at"][10 : len(data["recv_at"])]
         entrust_id = data["entrust_no"]
         entrusts = global_accunt_info["entursts"]
         entrusts[entrust_id] = data
