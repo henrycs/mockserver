@@ -550,7 +550,7 @@ def wrapper_cancel_entrusts(account_id: str, entrust_list: list):
 def wrapper_get_today_entrusts(entrust_list):
     db_entrusts = global_accunt_info["entursts"]
     if len(db_entrusts) == 0:
-        return {"status": 200, "msg": "success", "data": []}
+        return {"status": 200, "msg": "success", "data": {}}
 
     if entrust_list is None or len(entrust_list) == 0:
         return {"status": 200, "msg": "success", "data": db_entrusts}
