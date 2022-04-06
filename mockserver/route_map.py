@@ -73,7 +73,13 @@ async def bp_mock_history(request):
 
 @bp_mockcontroller.route("/reset")
 async def bp_mock_reset_mockdata(request):
-    handler.wrapper_reset_exec_data()
+    handler.wrapper_reset_exec_data(False)
+    return response.json(make_response(0, "OK", {"data": "all data cleared"}))
+
+
+@bp_mockcontroller.route("/clear")
+async def bp_mock_clear_mockdata(request):
+    handler.wrapper_reset_exec_data(True)
     return response.json(make_response(0, "OK", {"data": "all data cleared"}))
 
 

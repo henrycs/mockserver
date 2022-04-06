@@ -3,6 +3,7 @@ import json
 import logging
 import math
 from os import path
+from turtle import clear
 
 import cfg4py
 from mockserver.trade import BidType, OrderSide
@@ -15,13 +16,14 @@ global_case_data = {"case": "", "items": [], "index": -1, "executed": 0}
 global_case_exec_list = []
 
 
-def wrapper_reset_exec_data():
+def wrapper_reset_exec_data(clear_all: bool):
     # 清除所有执行记录
     global global_case_exec_list, global_case_data, global_accunt_info
 
-    global_accunt_info["entursts"] = {}
-    global_accunt_info["posistions"] = {}
-    global_accunt_info["trades"] = {}
+    if clear_all:
+        global_accunt_info["entursts"] = {}
+        global_accunt_info["posistions"] = {}
+        global_accunt_info["trades"] = {}
 
     global_case_data["case"] = ""
     global_case_data["items"] = []
@@ -240,12 +242,18 @@ def update_positions(data):
             pos["shares"] += filled_vol
             pos["sellable"] += filled_vol
             pos["amount"] += filled_vwap * filled_vol
-            pos["price"] = pos["amount"] / pos["shares"]
+            if pos["shares"] == 0:
+                pos["price"] = 0
+            else:
+                pos["price"] = pos["amount"] / pos["shares"]
         else:
             pos["shares"] -= filled_vol
             pos["sellable"] -= filled_vol
             pos["amount"] -= filled_vwap * filled_vol
-            pos["price"] = pos["amount"] / pos["shares"]
+            if pos["shares"] == 0:
+                pos["price"] = 0
+            else:
+                pos["price"] = pos["amount"] / pos["shares"]
 
 
 def wrapper_read_case_file(casename: str):
