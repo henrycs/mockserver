@@ -162,12 +162,12 @@ def execute_entrust_case(item):
 
     # 读取委托更新的内容
     if "entrust_update" in item:
-        item = item["entrust_update"]
-        datalist.append(item)
+        tmp = item["entrust_update"]
+        datalist.append(tmp)
 
     if "trade_result" in item:
-        item = item["trade_result"]
-        datalist.append(item)
+        tmp = item["trade_result"]
+        datalist.append(tmp)
 
     for data in datalist:
         entrust_id = data["entrust_no"]
