@@ -17,12 +17,9 @@ bp_mockcontroller = Blueprint(
 
 
 # -------------- mock server controller  ---------------
-@bp_mockcontroller.route("/load/<case>", methods=["GET"])
-async def bp_mock_load(request, case: str):
-    if case is None:
-        return response.json(make_response(404, "No case file specified"))
-
-    case_name = urllib.parse.unquote(case)
+@bp_mockcontroller.route("/load", methods=["POST"])
+async def bp_mock_load(request):
+    case_name = request.json.get("case")
     result = handler.wrapper_read_case_file(case_name)
 
     if result["status"] != 200:
@@ -31,11 +28,13 @@ async def bp_mock_load(request, case: str):
     return response.json(make_response(0, "OK", result["data"]))
 
 
-@bp_mockcontroller.route("/load", methods=["POST"])
+@bp_mockcontroller.route("/load_data", methods=["POST"])
 async def bp_mock_load2(request):
-    case_name = request.json.get("case")
-    result = handler.wrapper_read_case_file(case_name)
+    case_data = request.json
+    if case_data is None or isinstance(case_data, list) is False:
+        return response.json(make_response(-1, "case data must be a list"))
 
+    result = handler.wrapper_load_case_data(case_data)
     if result["status"] != 200:
         return response.json(make_response(-1, result["msg"]))
 

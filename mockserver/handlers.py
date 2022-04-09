@@ -4,6 +4,7 @@ import logging
 import math
 from os import path
 from turtle import clear
+import uuid
 
 import cfg4py
 from mockserver.trade import BidType, OrderSide
@@ -256,6 +257,11 @@ def update_positions(data):
                 pos["price"] = pos["amount"] / pos["shares"]
 
 
+def wrapper_load_case_data(casedata: list):
+    tempname = uuid.uuid4().hex
+    return initialize_case_data(casedata, tempname)
+
+
 def wrapper_read_case_file(casename: str):
     # 加载测试用例，检查所有步骤
     server_config = cfg4py.get_instance()
@@ -266,7 +272,6 @@ def wrapper_read_case_file(casename: str):
         logger.error("case file not found: %s", case_file)
         return {"status": 400, "msg": "case file not found"}
 
-    # 解析测试步骤
     items = []
     try:
         with open(case_file, "r", encoding="utf-8") as reader:
@@ -275,7 +280,12 @@ def wrapper_read_case_file(casename: str):
     except Exception as e:
         logger.error(e)
         return {"status": 400, "msg": str(e)}
+    
+    return initialize_case_data(items, casename)
 
+
+def initialize_case_data(items: list, casename: str):
+    # 解析测试步骤
     if len(items) == 0:
         logger.error("no content found in case file")
         return {"status": 400, "msg": "no content in case file"}
@@ -340,7 +350,7 @@ def wrapper_read_case_file(casename: str):
         }
     except Exception as e:
         logger.error(e)
-        return {"status": 500, "msg": e.msg}
+        return {"status": 500, "msg": e}
 
 
 def wrapper_get_balance(account_id: str):
