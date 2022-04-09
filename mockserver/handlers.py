@@ -2,9 +2,8 @@ import datetime
 import json
 import logging
 import math
-from os import path
-from turtle import clear
 import uuid
+from os import path
 
 import cfg4py
 from mockserver.trade import BidType, OrderSide
@@ -13,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 global_accunt_info = {"info": {}, "posistions": {}, "entursts": {}, "trades": {}}
-global_case_data = {"case": "", "items": [], "index": -1, "executed": 0}
+global_case_data = {"case": "", "items": [], "index": -1, "executed": 0, "date": None}
 global_case_exec_list = []
 
 
@@ -163,24 +162,14 @@ def execute_entrust_case(item):
 
     # 读取委托更新的内容
     if "entrust_update" in item:
-        items = item["entrust_update"]
-        if isinstance(items, list):
-            datalist.extend(items)
-        else:
-            datalist.append(items)
+        item = item["entrust_update"]
+        datalist.append(item)
 
     if "trade_result" in item:
-        items = item["trade_result"]
-        if isinstance(items, list):
-            datalist.extend(items)
-        else:
-            datalist.append(items)
+        item = item["trade_result"]
+        datalist.append(item)
 
     for data in datalist:
-        # 更新委托信息中的时间为当前时间
-        cur_date = datetime.datetime.now().strftime("%Y-%m-%d")
-        data["time"] = cur_date + data["time"][10 : len(data["time"])]
-        data["recv_at"] = cur_date + data["recv_at"][10 : len(data["recv_at"])]
         entrust_id = data["entrust_no"]
         entrusts = global_accunt_info["entursts"]
         entrusts[entrust_id] = data
@@ -280,7 +269,7 @@ def wrapper_read_case_file(casename: str):
     except Exception as e:
         logger.error(e)
         return {"status": 400, "msg": str(e)}
-    
+
     return initialize_case_data(items, casename)
 
 
@@ -290,8 +279,29 @@ def initialize_case_data(items: list, casename: str):
         logger.error("no content found in case file")
         return {"status": 400, "msg": "no content in case file"}
 
+    # 取当前时间
+    now = datetime.datetime.now()
+    global_case_data["date"] = now
+    datestr = now.strftime("%Y-%m-%d %H:%M:%S.%f")
+
+    if len(items) == 1:  # 单个买卖动作，动态更新ID
+        item = items[0]
+        action_name = item["test_action"]
+        if action_name.find("buy") >= 0 or action_name.find("sell") >= 0:
+            trade_result = item["trade_result"]
+            trade_result["entrust_no"] = str(uuid.uuid4())
+            trade_result["eid"] = str(uuid.uuid4())
+
+    # 更新委托信息中的时间为当前时间
     for item in items:
-        print(f"item in case file:\n{item}")
+        if "entrust_update" in item:
+            data = item["entrust_update"]
+            data["time"] = datestr
+            data["recv_at"] = datestr
+        if "trade_result" in item:
+            data = item["trade_result"]
+            data["time"] = datestr
+            data["recv_at"] = datestr
 
     try:
         # 如果上一个测试用例还没执行完，暂不允许加载新的
