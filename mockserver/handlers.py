@@ -226,12 +226,12 @@ def update_positions(data):
         order_side = trade["order_side"]
 
         filled_vol = int(trade["filled"])
-        filled_vwap = float(trade["average_price"])
+        filled_amount = float(trade["filled_amount"])
 
         if order_side == OrderSide.BUY:
             pos["shares"] += filled_vol
             pos["sellable"] += filled_vol
-            pos["amount"] += filled_vwap * filled_vol
+            pos["amount"] += filled_amount
             if pos["shares"] == 0:
                 pos["price"] = 0
             else:
@@ -239,7 +239,7 @@ def update_positions(data):
         else:
             pos["shares"] -= filled_vol
             pos["sellable"] -= filled_vol
-            pos["amount"] -= filled_vwap * filled_vol
+            pos["amount"] -= filled_amount
             if pos["shares"] == 0:
                 pos["price"] = 0
             else:
