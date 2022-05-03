@@ -1,6 +1,6 @@
 [tool]
 [tool.poetry]
-name = "zillionare-trader-client"
+name = "mockserver"
 version = "0.1.0"
 homepage = "https://github.com/zillionare/trader-client"
 description = "Skeleton project created by Python Project Wizard (ppw)."
