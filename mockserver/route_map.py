@@ -44,7 +44,7 @@ async def bp_mock_proceed(request):
 @bp_mockcontroller.route("/current")
 async def bp_mock_current(request):
     casename = request.json.get("case")
-    result = handler.wrapper_exec_current(casename)
+    result = handler.wrapper_current_stage(casename)
 
     if result["status"] != 200:
         return response.json(make_response(-1, result["msg"]))

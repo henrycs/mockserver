@@ -1,17 +1,14 @@
 import datetime
-import json
 import logging
 import math
 import uuid
-from os import path
 
-import cfg4py
 from mockserver.trade import BidType, OrderSide
 
 logger = logging.getLogger(__name__)
 
 # 账号基本信息
-global_accunt_info = {"info": {}, "posistions": {}, "entursts": {}, "trades": {}}
+global_accunt_info = {"info": {}, "entursts": {}}
 
 # 加载的测试用例，为了简化设计，不允许股票代码重复
 # 'uuid':{'items': [], 'executed': 0, 'index': -1, 'code': 'xxx''}
@@ -19,20 +16,20 @@ global_case_data = {}
 global_case_exec_list = []
 
 
+# /reset, /clear
 def wrapper_reset_exec_data(clear_all: bool):
     # 清除所有执行记录
     global global_case_exec_list, global_case_data, global_accunt_info
 
     if clear_all:
         global_accunt_info["entursts"] = {}
-        global_accunt_info["posistions"] = {}
-        global_accunt_info["trades"] = {}
 
     global_case_data = {}
     global_case_exec_list = []
 
 
-def wrapper_exec_current(casename):
+# /current
+def wrapper_current_stage(casename):
     # 读取当前正在执行的用例步骤
     casedata = global_case_data[casename]
     if casedata is None:
@@ -58,6 +55,7 @@ def wrapper_exec_current(casename):
     }
 
 
+# /history
 def wrapper_exec_history():
     return {"status": 200, "msg": "success", "data": global_case_exec_list}
 
@@ -67,13 +65,11 @@ def validate_action_before_executed(casedata):
     items = casedata["items"]
     current_index = casedata["index"]
 
-    # 尚未加载用例
-    if current_index == -1:
+    if current_index == -1:  # 尚未加载用例
         return {"status": 400, "msg": f"no case file loaded, {code}"}
-
-    exec_flag = casedata["executed"]
-
+    
     # 最后一个步骤已经执行了
+    exec_flag = casedata["executed"]    
     if current_index == len(items) - 1 and exec_flag == 1:
         item = items[current_index]
         last_stage = item["stage"]
@@ -95,26 +91,28 @@ def validate_action_before_executed(casedata):
     return {"status": 200, "msg": "OK"}
 
 
+# /proceed
 def wrapper_proceed_non_trade_action(casename):
     casedata = global_case_data[casename]
     if casedata is None:
         return {"status": 400, "msg": "no test case loaded"}
 
-    # 执行下一个测试步骤，如果是委托更新，则立刻执行
+    # 检查case的当前执行情况
     result = validate_action_before_executed(casedata)
     if result["status"] != 200:
         return result
 
     items = casedata["items"]
-    last_index = casedata["index"]
-
-    item = items[last_index]
+    
+    # 执行下一个测试步骤    
+    item = items[casedata["index"]]
     current_stage = item["stage"]
     action = item["test_action"]
+
+    #  如果是委托更新，则立刻执行
     if action == "entrust_update":
         execute_entrust_case(casedata, item)
         proceed_to_nextstep(casedata)
-
         return {
             "status": 200,
             "msg": "OK",
@@ -161,7 +159,7 @@ def proceed_to_nextstep(casedata):
         return None
 
 
-# 执行委托更新，同步更新交易信息，支持多个委托信息同时更新
+# 执行委托更新，同步更新交易信息
 def execute_entrust_case(casedata, item):
     datalist = []
 
@@ -179,14 +177,6 @@ def execute_entrust_case(casedata, item):
         entrusts = global_accunt_info["entursts"]
         entrusts[entrust_id] = data
 
-        # 如果委托是部分成交或者全部成交，更新成交清单
-        if data["status"] == 2 or data["status"] == 3:
-            trades = global_accunt_info["trades"]
-            trades[entrust_id] = data
-
-            # 更新持仓信息
-            update_positions(data)
-
     # 更新执行信息，记录历史步骤
     casedata["executed"] = 1
     global_case_exec_list.append(
@@ -198,57 +188,6 @@ def execute_entrust_case(casedata, item):
     )
 
     return 0
-
-
-def update_positions(data):
-    acct_info = global_accunt_info["info"]
-    account_id = acct_info["account"]
-    positions = global_accunt_info["posistions"]
-
-    code = data["code"]
-    positions[code] = {
-        "account": account_id,
-        "code": code,
-        "shares": 0,
-        "sellable": 0,
-        "price": 0,
-        "market_value": 0,
-        "amount": 0,
-    }
-
-    # 遍历交易记录，计算持仓数据
-    trades = global_accunt_info["trades"]
-    for trade in trades.values():
-        if trade["code"] != code:
-            continue
-
-        status = int(trade["status"])
-        if status == -1 or status == 1:
-            # 未成交的委托不参与计算
-            return None
-
-        pos = positions[code]
-        order_side = trade["order_side"]
-
-        filled_vol = int(trade["filled"])
-        filled_amount = float(trade["filled_amount"])
-
-        if order_side == OrderSide.BUY:
-            pos["shares"] += filled_vol
-            pos["sellable"] += filled_vol
-            pos["amount"] += filled_amount
-            if pos["shares"] == 0:
-                pos["price"] = 0
-            else:
-                pos["price"] = pos["amount"] / pos["shares"]
-        else:
-            pos["shares"] -= filled_vol
-            pos["sellable"] -= filled_vol
-            pos["amount"] -= filled_amount
-            if pos["shares"] == 0:
-                pos["price"] = 0
-            else:
-                pos["price"] = pos["amount"] / pos["shares"]
 
 
 def wrapper_load_case_data(casedata: list):
@@ -267,6 +206,21 @@ def get_code_from_casedata(items: list):
     return None
 
 
+def no_stages_in_case(casedata):
+    items = casedata["items"]
+    current_index = casedata["index"]
+
+    # 尚未加载用例
+    if current_index == -1:
+        return False
+
+    # 最后一个步骤已经执行了
+    if current_index == len(items) - 1:
+        return True
+    
+    return False
+
+
 def initialize_case_data(items: list, casename: str):
     global global_case_data
     if casename in global_case_data:
@@ -275,11 +229,19 @@ def initialize_case_data(items: list, casename: str):
 
     # 判断股票代码是否重复，不同的case不允许重复
     codes = []
+    to_be_deleted = []
     for _casename in global_case_data:
-        casedata = global_case_data[_casename]
+        casedata = global_case_data[_casename]        
+        if no_stages_in_case(casedata):
+            to_be_deleted.append(_casename)
+            continue
+
         tmp = casedata["items"]
         code = get_code_from_casedata(tmp)
         codes.append(code)
+    for _key in to_be_deleted:
+        del global_case_data[_key]
+
     newcode = get_code_from_casedata(items)
     if newcode in codes:
         logger.warning(f"code {newcode} already exists")
