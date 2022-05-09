@@ -19,17 +19,6 @@ bp_mockcontroller = Blueprint(
 # -------------- mock server controller  ---------------
 @bp_mockcontroller.route("/load", methods=["POST"])
 async def bp_mock_load(request):
-    case_name = request.json.get("case")
-    result = handler.wrapper_read_case_file(case_name)
-
-    if result["status"] != 200:
-        return response.json(make_response(-1, result["msg"]))
-
-    return response.json(make_response(0, "OK", result["data"]))
-
-
-@bp_mockcontroller.route("/load_data", methods=["POST"])
-async def bp_mock_load2(request):
     case_data = request.json
     if case_data is None or isinstance(case_data, list) is False:
         return response.json(make_response(-1, "case data must be a list"))
@@ -44,7 +33,8 @@ async def bp_mock_load2(request):
 # 如果是委托更新指令，直接执行，然后进到下一步
 @bp_mockcontroller.route("/proceed")
 async def bp_mock_proceed(request):
-    result = handler.wrapper_proceed_non_trade_action()
+    casename = request.json.get("case")
+    result = handler.wrapper_proceed_non_trade_action(casename)
     if result["status"] != 200:
         return response.json(make_response(-1, result["msg"]))
 
@@ -53,7 +43,8 @@ async def bp_mock_proceed(request):
 
 @bp_mockcontroller.route("/current")
 async def bp_mock_current(request):
-    result = handler.wrapper_exec_current()
+    casename = request.json.get("case")
+    result = handler.wrapper_exec_current(casename)
 
     if result["status"] != 200:
         return response.json(make_response(-1, result["msg"]))
@@ -222,26 +213,6 @@ async def bp_mock_cancel_entrust(request):
         )
 
     result = handler.wrapper_cancel_entrust(account_id, entrust_no)
-    if result["status"] != 200:
-        return response.json(make_response(-1, result["msg"]))
-
-    # we can check result.status if this entrust success
-    logger.info(f"cancel result: {result['data']}")
-    return response.json(make_response(0, "OK", result["data"]))
-
-
-@bp_mockserver.route("/cancel_entrusts", methods=["POST"])
-async def bp_mock_cancel_entrusts(request):
-    account_id = request.headers.get("Account-ID")
-
-    order_list = request.json.get("entrust_no")
-    logger.info("cancel entrusts: %s -> %s", account_id, order_list)
-    if not isinstance(order_list, list):
-        return response.json(
-            make_response(-1, "cancel_entrusts: entrust_no must be list")
-        )
-
-    result = handler.wrapper_cancel_entrusts(account_id, order_list)
     if result["status"] != 200:
         return response.json(make_response(-1, result["msg"]))
 

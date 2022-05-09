@@ -10,9 +10,12 @@ from mockserver.trade import BidType, OrderSide
 
 logger = logging.getLogger(__name__)
 
-
+# 账号基本信息
 global_accunt_info = {"info": {}, "posistions": {}, "entursts": {}, "trades": {}}
-global_case_data = {"case": "", "items": [], "index": -1, "executed": 0, "date": None}
+
+# 加载的测试用例，为了简化设计，不允许股票代码重复
+# 'uuid':{'items': [], 'executed': 0, 'index': -1, 'code': 'xxx''}
+global_case_data = {}
 global_case_exec_list = []
 
 
@@ -25,30 +28,29 @@ def wrapper_reset_exec_data(clear_all: bool):
         global_accunt_info["posistions"] = {}
         global_accunt_info["trades"] = {}
 
-    global_case_data["case"] = ""
-    global_case_data["items"] = []
-    global_case_data["index"] = -1
-    global_case_data["executed"] = 0
-
+    global_case_data = {}
     global_case_exec_list = []
 
 
-def wrapper_exec_current():
+def wrapper_exec_current(casename):
     # 读取当前正在执行的用例步骤
-    casename = global_case_data["case"]
-    index = global_case_data["index"]
+    casedata = global_case_data[casename]
+    if casedata is None:
+        return {"status": 400, "msg": "no test case loaded"}
+
+    index = casedata["index"]
     if index == -1:
         return {"status": 400, "msg": "no test case loaded"}
 
-    exec_flag = global_case_data["executed"]
-    items = global_case_data["items"]
+    exec_flag = casedata["executed"]
+    items = casedata["items"]
     item = items[index]
 
     return {
         "status": 200,
         "msg": "success",
         "data": {
-            "case": casename,
+            "code": casedata["code"],
             "stage": item["stage"],
             "action": item["test_action"],
             "executed": exec_flag,
@@ -60,16 +62,16 @@ def wrapper_exec_history():
     return {"status": 200, "msg": "success", "data": global_case_exec_list}
 
 
-def validate_action_before_executed():
-    casename = global_case_data["case"]
-    items = global_case_data["items"]
-    current_index = global_case_data["index"]
+def validate_action_before_executed(casedata):
+    code = casedata["code"]
+    items = casedata["items"]
+    current_index = casedata["index"]
 
     # 尚未加载用例
-    if len(casename) == 0 or current_index == -1:
-        return {"status": 400, "msg": f"no case file loaded, {casename}"}
+    if current_index == -1:
+        return {"status": 400, "msg": f"no case file loaded, {code}"}
 
-    exec_flag = global_case_data["executed"]
+    exec_flag = casedata["executed"]
 
     # 最后一个步骤已经执行了
     if current_index == len(items) - 1 and exec_flag == 1:
@@ -77,7 +79,7 @@ def validate_action_before_executed():
         last_stage = item["stage"]
         return {
             "status": 400,
-            "msg": f"no more stages, last stage, {casename}:{last_stage}",
+            "msg": f"no more stages, last stage, {code}:{last_stage}",
         }
 
     # 如果当前步骤已执行
@@ -87,34 +89,37 @@ def validate_action_before_executed():
         action = item["test_action"]
         return {
             "status": 400,
-            "msg": f"current action already executed: {casename}->{last_stage}: {action}",
+            "msg": f"current action already executed: {code}->{last_stage}: {action}",
         }
 
     return {"status": 200, "msg": "OK"}
 
 
-def wrapper_proceed_non_trade_action():
+def wrapper_proceed_non_trade_action(casename):
+    casedata = global_case_data[casename]
+    if casedata is None:
+        return {"status": 400, "msg": "no test case loaded"}
+
     # 执行下一个测试步骤，如果是委托更新，则立刻执行
-    result = validate_action_before_executed()
+    result = validate_action_before_executed(casedata)
     if result["status"] != 200:
         return result
 
-    casename = global_case_data["case"]
-    items = global_case_data["items"]
-    last_index = global_case_data["index"]
+    items = casedata["items"]
+    last_index = casedata["index"]
 
     item = items[last_index]
     current_stage = item["stage"]
     action = item["test_action"]
     if action == "entrust_update":
-        execute_entrust_case(item)
-        proceed_to_nextstep()
+        execute_entrust_case(casedata, item)
+        proceed_to_nextstep(casedata)
 
         return {
             "status": 200,
             "msg": "OK",
             "data": {
-                "case": casename,
+                "code": casedata["code"],
                 "stage": current_stage,
                 "action": action,
                 "status": "action executed",
@@ -127,29 +132,29 @@ def wrapper_proceed_non_trade_action():
     }
 
 
-def proceed_to_nextstep():
+def proceed_to_nextstep(casedata):
     # 推进到下一个测试步骤，待执行
-    casename = global_case_data["case"]
-    items = global_case_data["items"]
-    current_index = global_case_data["index"]
+    code = casedata["code"]
+    items = casedata["items"]
+    current_index = casedata["index"]
 
     # 尚未加载用例
-    if len(casename) == 0 or current_index == -1:
-        logger.info(f"no case file loaded, {casename}")
+    if current_index == -1:
+        logger.info(f"no case file loaded, {code}")
         return None
 
     # 最后一个步骤已经执行了
     if current_index == len(items) - 1:
         item = items[current_index]
         last_stage = item["stage"]
-        logger.info(f"no more stages, last stage: {casename}:{last_stage}")
+        logger.info(f"no more stages, last stage: {code}:{last_stage}")
         return None
 
     # 跳到下一个步骤
-    exec_flag = global_case_data["executed"]
+    exec_flag = casedata["executed"]
     if exec_flag == 1:
-        global_case_data["index"] = current_index + 1
-        global_case_data["executed"] = 0
+        casedata["index"] = current_index + 1
+        casedata["executed"] = 0
         return 0
     else:
         logger.warning("current stage not executed, cannot proceed to next step")
@@ -157,7 +162,7 @@ def proceed_to_nextstep():
 
 
 # 执行委托更新，同步更新交易信息，支持多个委托信息同时更新
-def execute_entrust_case(item):
+def execute_entrust_case(casedata, item):
     datalist = []
 
     # 读取委托更新的内容
@@ -183,10 +188,10 @@ def execute_entrust_case(item):
             update_positions(data)
 
     # 更新执行信息，记录历史步骤
-    global_case_data["executed"] = 1
+    casedata["executed"] = 1
     global_case_exec_list.append(
         {
-            "case": global_case_data["case"],
+            "code": casedata["code"],
             "stage": item["stage"],
             "action": item["test_action"],
         }
@@ -251,29 +256,35 @@ def wrapper_load_case_data(casedata: list):
     return initialize_case_data(casedata, tempname)
 
 
-def wrapper_read_case_file(casename: str):
-    # 加载测试用例，检查所有步骤
-    server_config = cfg4py.get_instance()
-    case_dir = server_config.server_info.case_folder
-
-    case_file = path.normpath(path.join(case_dir, f"{casename}.txt"))
-    if not path.exists(case_file):
-        logger.error("case file not found: %s", case_file)
-        return {"status": 400, "msg": "case file not found"}
-
-    items = []
-    try:
-        with open(case_file, "r", encoding="utf-8") as reader:
-            content = reader.read()
-            items = json.loads(content)
-    except Exception as e:
-        logger.error(e)
-        return {"status": 400, "msg": str(e)}
-
-    return initialize_case_data(items, casename)
+def get_code_from_casedata(items: list):
+    for item in items:
+        if "entrust_update" in item:
+            data = item["entrust_update"]
+            return data["code"]
+        if "trade_result" in item:
+            data = item["trade_result"]
+            return data["code"]
+    return None
 
 
 def initialize_case_data(items: list, casename: str):
+    global global_case_data
+    if casename in global_case_data:
+        logger.warning(f"case {casename} already exists")
+        return {"status": 400, "msg": "duplicated case name"}
+
+    # 判断股票代码是否重复，不同的case不允许重复
+    codes = []
+    for _casename in global_case_data:
+        casedata = global_case_data[_casename]
+        tmp = casedata["items"]
+        code = get_code_from_casedata(tmp)
+        codes.append(code)
+    newcode = get_code_from_casedata(items)
+    if newcode in codes:
+        logger.warning(f"code {newcode} already exists")
+        return {"status": 400, "msg": "duplicated code"}
+
     # 解析测试步骤
     if len(items) == 0:
         logger.error("no content found in case file")
@@ -281,7 +292,6 @@ def initialize_case_data(items: list, casename: str):
 
     # 取当前时间
     now = datetime.datetime.now()
-    global_case_data["date"] = now
     datestr = now.strftime("%Y-%m-%d %H:%M:%S.%f")
 
     if len(items) == 1:  # 单个买卖动作，动态更新ID
@@ -304,38 +314,13 @@ def initialize_case_data(items: list, casename: str):
             data["recv_at"] = datestr
 
     try:
-        # 如果上一个测试用例还没执行完，暂不允许加载新的
-        old_case = global_case_data["case"]
-        if old_case == casename:
-            return {"status": 400, "msg": f"cannot load same test case: {old_case}"}
-
-        old_items = global_case_data["items"]
-        old_index = global_case_data["index"]
-        old_exec_flag = global_case_data["executed"]
-
-        # 没有加载过文件
-        if len(old_items) == 0:
-            pass
-        # 如果上一个用例还没开始执行，可以重新加载新的文件
-        elif old_index == 0 and old_exec_flag == 0:
-            pass
-        # 上一个用例已经执行完毕
-        elif len(old_items) == old_index + 1 and old_exec_flag == 1:
-            pass
-        else:
-            old_item = old_items[old_index]
-            return {
-                "status": 400,
-                "msg": f"actions in last case not executed: {old_case}:{old_item['stage']}",
-            }
-
-        # 加载新用例的全部数据
-        global_case_data["case"] = casename
-        global_case_data["items"] = items
+        casedata = {"code": newcode}
+        casedata["items"] = items
+        global_case_data[casename] = casedata
 
         # 前进到第一个用例
-        global_case_data["index"] = 0
-        global_case_data["executed"] = 0
+        casedata["index"] = 0
+        casedata["executed"] = 0
 
         item = items[0]
         act_result = "to be executed"
@@ -344,8 +329,8 @@ def initialize_case_data(items: list, casename: str):
 
         # 如果第一个用例是委托更新，则自动执行
         if item["test_action"] == "entrust_update":
-            execute_entrust_case(item)
-            proceed_to_nextstep()
+            execute_entrust_case(casedata, item)
+            proceed_to_nextstep(casedata)
             act_result = "action executed"
 
         return {
@@ -377,6 +362,28 @@ def wrapper_get_positions(account_id: str):
     return {"status": 200, "msg": "success", "data": data}
 
 
+def get_casedata_via_code(code):
+    for casename in global_case_data:
+        casedata = global_case_data[casename]
+        if code == casedata["code"]:
+            return casedata
+
+    return None
+
+
+def get_casedata_via_cid(cid):
+    for casename in global_case_data:
+        casedata = global_case_data[casename]
+        items = casedata["items"]
+        for item in items:
+            if "parameters" in item:
+                parameters = item["parameters"]
+                if "entrust_no" in parameters and parameters["entrust_no"] == cid:
+                    return casedata
+
+    return None
+
+
 # ------------------------------- 交易指令 ---------------------------------------
 
 
@@ -388,13 +395,16 @@ def wrapper_trade_operation(
     order_side: OrderSide,
     bid_type: BidType,
 ):
-    result = validate_action_before_executed()
+    casedata = get_casedata_via_code(security)
+    if casedata is None:
+        return {"status": 400, "msg": "invalid security"}
+
+    result = validate_action_before_executed(casedata)
     if result["status"] != 200:
         return result
 
-    casename = global_case_data["case"]
-    items = global_case_data["items"]
-    index = global_case_data["index"]
+    items = casedata["items"]
+    index = casedata["index"]
 
     trade_operation = items[index]
     if trade_operation is None or "test_action" not in trade_operation:
@@ -407,7 +417,7 @@ def wrapper_trade_operation(
         ):
             return {
                 "status": 400,
-                "msg": f"action not matched, {casename}, {trade_operation['stage']}, {trade_operation['test_action']}",
+                "msg": f"action not matched, {security}, {trade_operation['stage']}, {trade_operation['test_action']}",
             }
 
     if order_side == OrderSide.SELL:
@@ -417,7 +427,7 @@ def wrapper_trade_operation(
         ):
             return {
                 "status": 400,
-                "msg": f"action not matched, {casename}, {trade_operation['stage']}, {trade_operation['test_action']}",
+                "msg": f"action not matched, {security}, {trade_operation['stage']}, {trade_operation['test_action']}",
             }
 
     if "parameters" not in trade_operation or "trade_result" not in trade_operation:
@@ -443,26 +453,30 @@ def wrapper_trade_operation(
         and math.isclose(price, price_in_action, rel_tol=1e-5)
     ):
         # 设置当前步骤已执行
-        execute_entrust_case(trade_operation)
+        execute_entrust_case(casedata, trade_operation)
         # 跳到下一个步骤
-        proceed_to_nextstep()
+        proceed_to_nextstep(casedata)
         return {"status": 200, "msg": "success", "data": data}
     else:
         return {
             "status": 400,
-            "msg": f"parameters in trade operation not matched, {casename} -> {trade_operation['stage']}",
+            "msg": f"parameters in trade operation not matched, {security} -> {trade_operation['stage']}",
         }
 
 
 def wrapper_cancel_entrust(account_id: str, entrust_no: str):
-    result = validate_action_before_executed()
+    casedata = get_casedata_via_cid(entrust_no)
+    if casedata is None:
+        return {"status": 400, "msg": "invalid entrust id"}
+
+    result = validate_action_before_executed(casedata)
     if result["status"] != 200:
         return result
 
-    casename = global_case_data["case"]
-    items = global_case_data["items"]
-    index = global_case_data["index"]
-    exec_flag = global_case_data["executed"]
+    code = casedata["code"]
+    items = casedata["items"]
+    index = casedata["index"]
+    exec_flag = casedata["executed"]
 
     trade_operation = items[index]
     if trade_operation is None or "test_action" not in trade_operation:
@@ -477,13 +491,13 @@ def wrapper_cancel_entrust(account_id: str, entrust_no: str):
     if trade_operation["test_action"] != "cancel_entrust":
         return {
             "status": 400,
-            "msg": f"action not matched, {casename}, {trade_operation['stage']}, {trade_operation['stage']}",
+            "msg": f"action not matched, {code}, {trade_operation['stage']}, {trade_operation['stage']}",
         }
 
     if exec_flag == 1:
         return {
             "status": 400,
-            "msg": f"current action already executed, {casename} -> {trade_operation['stage']}, {trade_operation['test_action']}",
+            "msg": f"current action already executed, {code} -> {trade_operation['stage']}, {trade_operation['test_action']}",
         }
 
     params = trade_operation["parameters"]
@@ -493,86 +507,15 @@ def wrapper_cancel_entrust(account_id: str, entrust_no: str):
     if isinstance(entrust_in_action, list) or entrust_in_action != entrust_no:
         return {
             "status": 400,
-            "msg": f"parameters in trade operation not matched, {casename} -> {trade_operation['stage']}",
+            "msg": f"parameters in trade operation not matched, {code} -> {trade_operation['stage']}",
         }
 
     # 设置当前步骤已执行
-    execute_entrust_case(trade_operation)
+    execute_entrust_case(casedata, trade_operation)
     # 跳到下一个步骤
-    proceed_to_nextstep()
+    proceed_to_nextstep(casedata)
 
     return {"status": 200, "msg": "success", "data": data}
-
-
-def wrapper_cancel_entrusts(account_id: str, entrust_list: list):
-    result = validate_action_before_executed()
-    if result["status"] != 200:
-        return result
-
-    casename = global_case_data["case"]
-    items = global_case_data["items"]
-    index = global_case_data["index"]
-    exec_flag = global_case_data["executed"]
-
-    trade_operation = items[index]
-    if trade_operation is None or "test_action" not in trade_operation:
-        return {"status": 400, "msg": "no test_action defined in case stage"}
-
-    if "parameters" not in trade_operation or "trade_result" not in trade_operation:
-        return {
-            "status": 400,
-            "msg": "parameters and trade_result in trade operation not defined",
-        }
-
-    if trade_operation["test_action"] != "cancel_entrusts":
-        return {
-            "status": 400,
-            "msg": f"action not matched, {casename}, {trade_operation['stage']}, {trade_operation['stage']}",
-        }
-
-    if exec_flag == 1:
-        return {
-            "status": 400,
-            "msg": f"current action already executed, {casename} -> {trade_operation['stage']}, {trade_operation['test_action']}",
-        }
-
-    # "entrust_no" : ["xx","xx"]
-    params = trade_operation["parameters"]
-    # entrust list
-    data = trade_operation["trade_result"]
-    if not isinstance(data, list):
-        return {
-            "status": 400,
-            "msg": f"entrust result in trade operation must be list, {casename} -> {trade_operation['stage']}",
-        }
-
-    order_list = params["entrust_no"]
-    if not isinstance(order_list, list) or len(order_list) != len(entrust_list):
-        return {
-            "status": 400,
-            "msg": f"parameters in trade operation not matched, {casename} -> {trade_operation['stage']}",
-        }
-
-    id_matched = True
-    for entrust in entrust_list:
-        if entrust not in order_list:
-            id_matched = False
-            break
-    if not id_matched:
-        return {
-            "status": 400,
-            "msg": f"entrust id in trade operation not matched, {casename} -> {trade_operation['stage']}",
-        }
-
-    # 设置当前步骤已执行
-    execute_entrust_case(trade_operation)
-    # 跳到下一个步骤
-    proceed_to_nextstep()
-
-    results = {}
-    for tmp in data:
-        results[tmp["entrust_no"]] = tmp
-    return {"status": 200, "msg": "success", "data": results}
 
 
 def wrapper_get_today_entrusts(entrust_list):
