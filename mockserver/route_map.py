@@ -31,7 +31,7 @@ async def bp_mock_load(request):
 
 
 # 如果是委托更新指令，直接执行，然后进到下一步
-@bp_mockcontroller.route("/proceed")
+@bp_mockcontroller.route("/proceed", methods=["POST"])
 async def bp_mock_proceed(request):
     casename = request.json.get("case")
     result = handler.wrapper_proceed_non_trade_action(casename)
