@@ -18,7 +18,8 @@ class BidType(IntEnum):
 
 class OrderStatus(IntEnum):
     ERROR = -1  # 异常
-    NO_DEAL = 1  # 未成交
-    PARTIAL_TRANSACTION = 2  # #部分成交
-    ALL_TRANSACTIONS = 3  # 全部成交
-    CANCEL_ALL_ORDERS = 4  # 全部撤单
+    RECEIVED = 0  # 待报
+    SUBMITTED = 1  # 已报
+    PARTIAL_TX = 2  # #部分成交
+    ALL_TX = 3  # 全部成交
+    CANCELED = 4  # 撤单
